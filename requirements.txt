@@ -1,0 +1,6 @@
+Flask==2.2.3
+requests==2.31.0
+base64==1.0.3
+Pillow==9.4.0
+flask-cors==3.0.10
+python-dotenv==0.21.0
