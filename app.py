@@ -107,7 +107,7 @@ def chat():
         }
 
         payload = {
-            "model": "openbmb/MiniCPM-Llama3-V-2_5",
+            "model": "meta-llama/Llama-3.2-11B-Vision-Instruct",
             "messages": conversation_history,
             "temperature": 0.4,
             "max_tokens": 400
