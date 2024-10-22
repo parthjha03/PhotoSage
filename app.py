@@ -1,3 +1,4 @@
+# app.py
 import os
 import requests
 import base64
@@ -41,8 +42,6 @@ def compress_image(image_data):
         scale_factor = (MAX_PIXELS / num_pixels) ** 0.5
         new_width = int(width * scale_factor)
         new_height = int(height * scale_factor)
-        
-        
         image = image.resize((new_width, new_height), Image.LANCZOS)
     
     buffered = io.BytesIO()
@@ -75,15 +74,19 @@ def chat():
 
         app.logger.info(f"Received request. Message: {user_message}, Image: {'Yes' if image else 'No'}")
 
-        if not conversation_history:
-            conversation_history = [{"role": "system", "content": SYSTEM_PROMPT}]
-
+        # Initialize messages list
+        messages = []
+        
+        # Handle image input differently than text-only input
         if image:
             try:
-                
                 processed_image = compress_image(image)
                 
-                conversation_history.append({
+                # For image inputs, incorporate system prompt into the user message
+                enhanced_user_message = (f"{SYSTEM_PROMPT}\n\n"
+                                       f"Based on the above instructions, please {user_message or 'provide a detailed description of this image, focusing on key elements, colors, composition, and any notable features.'}")
+                
+                messages.append({
                     "role": "user",
                     "content": [
                         {
@@ -92,14 +95,18 @@ def chat():
                                 "url": f"data:image/jpeg;base64,{processed_image}"
                             }
                         },
-                        {"type": "text", "text": user_message or "Please provide a detailed description of this image, focusing on key elements, colors, composition, and any notable features."}
+                        {"type": "text", "text": enhanced_user_message}
                     ]
                 })
             except Exception as e:
                 app.logger.error(f"Error processing image: {str(e)}")
                 return jsonify({"error": f"Error processing image: {str(e)}"}), 400
         else:
-            conversation_history.append({"role": "user", "content": user_message})
+            # For text-only inputs, we can use the system message
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            if conversation_history:
+                messages.extend(conversation_history[1:])  # Skip the system message if it exists
+            messages.append({"role": "user", "content": user_message})
 
         headers = {
             "Content-Type": "application/json",
@@ -108,7 +115,7 @@ def chat():
 
         payload = {
             "model": "meta-llama/Llama-3.2-11B-Vision-Instruct",
-            "messages": conversation_history,
+            "messages": messages,
             "temperature": 0.4,
             "max_tokens": 400
         }
@@ -120,11 +127,17 @@ def chat():
             app.logger.info(f"Received response from DeepInfra API: {response.json()}")
             generated_text = response.json()['choices'][0]['message']['content']
             
-            conversation_history.append({"role": "assistant", "content": generated_text})
-            
-            
+            # Update conversation history
+            if image:
+                # For image messages, store a simplified version in history
+                conversation_history = [{"role": "user", "content": user_message or "Image analysis request"},
+                                     {"role": "assistant", "content": generated_text}]
+            else:
+                conversation_history.append({"role": "assistant", "content": generated_text})
+                
+            # Maintain conversation history length
             if len(conversation_history) > 41:
-                conversation_history = [conversation_history[0]] + conversation_history[-20:]
+                conversation_history = [{"role": "system", "content": SYSTEM_PROMPT}] + conversation_history[-20:]
             
             return jsonify({
                 "output": generated_text.strip(), 
